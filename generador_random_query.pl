@@ -1,10 +1,11 @@
 #!/usr/bin/perl
 ######################################################################
-# Generador random queries.
+# Generador random queries y QR codigos en imagenes.
 ######################################################################
 use strict;
 use feature "say";
 use Getopt::Std;
+use Pod::Usage;
 use autodie;
 use POSIX q/strftime/;
 use Crypt::PasswdMD5;
@@ -77,12 +78,12 @@ foreach my $p ( sort(@passes) ) {
     $id++;
 }
 my @EQUIVALENCIAS  = ();
-my $lna_encabezado = 'ARCHIVO_IMAGEN,CODIGO_ID,URL_CODIGO_ID' . "\n";
+my $lna_encabezado = 'ARCHIVO_IMAGEN,CODIGO_ID,URL_CON_CODIGO' . "\n";
 push( @EQUIVALENCIAS, $lna_encabezado );
 foreach my $k ( keys %codigos_finales ) {
     my $F   = $codigos_finales{$k}{'F'};
     my $URI = $codigos_finales{$k}{'URI'};
-    my $nn  = $t_banana . "_" . $k . '.gif';
+    my $nn  = 'QR_' . $k . $t_banana . "_" . '.gif';
     qr_como_un_loco( "$F", "$nn" );
     say "$nn === $F" if $debug;
     my $lna_para_csv_equivalencias = join( ',', ( $nn, $URI, $F ) ) . "\n";
