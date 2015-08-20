@@ -2,17 +2,24 @@
 ######################################################################
 # Generador random queries.
 ######################################################################
-
 use strict;
 use feature "say";
 use Getopt::Std;
 use autodie;
-use Data::Dumper;
+use POSIX q/strftime/;
 use Crypt::PasswdMD5;
 use Digest::SHA "sha1_base64";
 use URI::Escape "uri_escape";
 use File::Slurp "write_file";
 use Imager::QRCode;
+
+my %opts = ();
+getopts('dhc:l:s:',\%opts);
+
+if ( $opts{h} ) {
+    ayudas();
+    exit;
+}
 
 ######################################################################
 # QR OPTIONS
@@ -27,6 +34,10 @@ my $QR_size          = 2;
 my $QR_margin        = 2;
 # L M Q H 
 my $QR_level         = 'M';
+if ($opts{l} =~ /^L$|^M$|^Q$|^H$/){
+    $QR_level = $opts{l} ;   
+}
+
 # mayusculas, minusculas...
 my $QR_casesensitive = 1;
 
@@ -41,51 +52,47 @@ my $qrcode = Imager::QRCode->new(
 );
     
 
-my %opts = ();
-getopts('dh',\%opts);
-
+# Variables Necesarias
+my $t_banana = strftime ("%d_%B_%Y_%H_%M_%S",localtime(time()));
 my $debug = $opts{d} || 0;
-my $cantidadPasses_a_generar = 10;
+my $cantidadPasses_a_generar = $opts{c} || 10;
 
-my $salt = 'sabaduba123@#^0s0s~~!~';
+my $salt = $opts{s} || random_hash(11);
 my @passes = map { $_ = random_hash(64) ; $_ } (0 .. $cantidadPasses_a_generar);
 my %codigos_finales = ();
 my $id = 1;
-my $table_qr = "tabla_qr" . ".csv"; # Salida a CSV
+my $table_qr = "tabla_qr" . $t_banana . ".csv"; # Salida a CSV
 
 ######################################################################
 # MAIN
 ######################################################################
-if ( $opts{h} ) {
-    ayudas();
-    exit;
+foreach my $p ( sort(@passes) ) {
+    $codigos_finales{$id}{'P'}   = $p;
+    $codigos_finales{$id}{'DES'} = crypt( $p, $salt );
+    $codigos_finales{$id}{'MD5'} = unix_md5_crypt( $p, $salt );
+    my $choclo =
+      $codigos_finales{$id}{'DES'} . $codigos_finales{$id}{'MD5'};
+    $codigos_finales{$id}{'F'}   = sha1_base64($choclo);
+    $codigos_finales{$id}{'URI'} = uri_escape( $codigos_finales{$id}{'F'} );
+    $id++;
 }
-else {
-    foreach my $p ( sort(@passes) ) {
-        $codigos_finales{$id}{'P'}   = $p;
-        $codigos_finales{$id}{'DES'} = crypt( $p, $salt );
-        $codigos_finales{$id}{'MD5'} = unix_md5_crypt( $p, $salt );
-        my $choclo =
-          $codigos_finales{$id}{'DES'} . $codigos_finales{$id}{'MD5'};
-        $codigos_finales{$id}{'F'}   = sha1_base64($choclo);
-        $codigos_finales{$id}{'URI'} = uri_escape( $codigos_finales{$id}{'F'} );
-        $id++;
-    }
-    my @EQUIVALENCIAS = ();
-    my $lna_encabezado = 'ARCHIVO_IMAGEN,CODIGO_ID,URL_CODIGO_ID' . "\n";
-    push (@EQUIVALENCIAS,$lna_encabezado);
-    foreach my $k ( keys %codigos_finales ) {
-        my $F   = $codigos_finales{$k}{'F'};
-        my $URI = $codigos_finales{$k}{'URI'};
-        my $nn  = $k . '.gif';
-        qr_como_un_loco( "$F", "$nn" );
-        say "$nn === $F" if $debug;
-        my $lna_para_csv_equivalencias = join(',',($nn,$URI,$F)) . "\n";
-        push(@EQUIVALENCIAS,$lna_para_csv_equivalencias);
-    }
-    #guardar una tabla con las equivalencias en texto y QR.
-    write_file($table_qr,@EQUIVALENCIAS);
+my @EQUIVALENCIAS  = ();
+my $lna_encabezado = 'ARCHIVO_IMAGEN,CODIGO_ID,URL_CODIGO_ID' . "\n";
+push( @EQUIVALENCIAS, $lna_encabezado );
+foreach my $k ( keys %codigos_finales ) {
+    my $F   = $codigos_finales{$k}{'F'};
+    my $URI = $codigos_finales{$k}{'URI'};
+    my $nn  = $t_banana . "_" . $k . '.gif';
+    qr_como_un_loco( "$F", "$nn" );
+    say "$nn === $F" if $debug;
+    my $lna_para_csv_equivalencias = join( ',', ( $nn, $URI, $F ) ) . "\n";
+    push( @EQUIVALENCIAS, $lna_para_csv_equivalencias );
 }
+
+#guardar una tabla con las equivalencias en texto y QR.
+write_file( $table_qr, @EQUIVALENCIAS );
+
+exit 0;
 
 ######################################################################
 # Funciones
@@ -102,21 +109,31 @@ sub qr_como_un_loco {
     my $texto_para_qr        = $_[0];
     my $nombre_archivo_final = $_[1];
     my $img                  = $qrcode->plot($texto_para_qr);
-    $img->write( file => "$nombre_archivo_final" );
+    $img->write( file       => "$nombre_archivo_final" );
 }
-
 sub ayudas {
-    say "Generador de codigos QR." and exit;
+    pod2usage(-verbose=>2);
 }
-
 
 =pod
-
-=encoding utf8
 
 =head1 SYNOPSIS
 
 Script para generar codigos qr de random strings...
+
+=head2 Forma de uso:
+
+=over
+
+=item  *c     cantidad de codigos a generar 
+
+=item  *l     level [L | M | Q | H]
+
+=item  *s     salt [string]
+
+=back
+
+Sin opciones genera 10 codigos Qr (imagenes gif) y una tabla con las equivalencias entre imagen y strings.
 
 Huevada mayuscula.
 
